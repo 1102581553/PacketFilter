@@ -67,7 +67,7 @@ bool PacketFilter::disable() {
     return true;
 }
 
-// ── 原始数据报过滤（RakNet 内部处理之前）─────────────────
+// 原始数据报过滤
 static bool handleIncomingDatagram(RakNet::RNS2RecvStruct* recv) {
     if (!config.enabled || !recv) return true;
 
@@ -96,7 +96,7 @@ static bool handleIncomingDatagram(RakNet::RNS2RecvStruct* recv) {
 
 } // namespace packet_filter
 
-// ── Hook peerStartup，注入数据报过滤器 ───────────────────
+//  Hook peerStartup
 LL_AUTO_TYPE_INSTANCE_HOOK(
     RakPeerHelperStartupHook,
     ll::memory::HookPriority::Normal,
@@ -119,7 +119,7 @@ LL_AUTO_TYPE_INSTANCE_HOOK(
     return result;
 }
 
-// ── Hook RakPeer::Receive，过滤已处理的过短包 ─────────────
+// Hook RakPeer::Receive
 LL_AUTO_TYPE_INSTANCE_HOOK(
     RakPeerReceiveHook,
     ll::memory::HookPriority::Normal,
