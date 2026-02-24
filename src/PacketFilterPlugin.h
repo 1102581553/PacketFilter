@@ -6,7 +6,6 @@
 
 namespace packet_filter {
 
-// RakNet::Packet 中 length 字段的偏移（mUnk80581e @ offset 152）
 static constexpr size_t kPacketLengthOffset = 152;
 
 class PacketFilterPlugin : public RakNet::PluginInterface2 {
@@ -22,7 +21,6 @@ public:
     }
 
     void setMinSize(uint s) { mMinSize = s; }
-
 private:
     uint mMinSize;
 };
