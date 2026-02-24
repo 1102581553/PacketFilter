@@ -5,9 +5,9 @@
 namespace packet_filter {
 
 struct Config {
-    int  version        = 1;
-    bool enabled        = true;
-    uint minPacketSize  = 2;
+    int  version       = 1;
+    bool enabled       = true;
+    uint minPacketSize = 2;
 };
 
 Config& getConfig();
