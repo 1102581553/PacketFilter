@@ -17,7 +17,7 @@ namespace packet_filter {
 
 static Config config;
 static std::shared_ptr<ll::io::Logger> log;
-static std::unique_ptr<PacketFilterPlugin> gPlugin;
+std::unique_ptr<PacketFilterPlugin> gPlugin;
 
 static ll::io::Logger& getLogger() {
     if (!log) log = ll::io::LoggerRegistry::getInstance().getOrCreate("PacketFilter");
@@ -80,7 +80,7 @@ LL_AUTO_TYPE_INSTANCE_HOOK(
     int threadPriority
 ) {
     auto result = origin(maxConnections, socketDescriptors, socketDescriptorCount, threadPriority);
-    if (result == ::RakNet::StartupResult::Started && packet_filter::gPlugin) {
+    if (result == ::RakNet::StartupResult::RaknetStarted && packet_filter::gPlugin) {
         this->AttachPlugin(packet_filter::gPlugin.get());
     }
     return result;
