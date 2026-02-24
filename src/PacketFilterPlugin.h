@@ -6,7 +6,12 @@
 
 namespace packet_filter {
 
+// RakNet::Packet 中 length 字段偏移
 static constexpr size_t kPacketLengthOffset = 152;
+
+// RakNet::RNS2RecvStruct 布局偏移
+static constexpr size_t kRecvDataOffset      = 0;     // char data[1600]
+static constexpr size_t kRecvBytesReadOffset  = 1600;  // int bytes_read
 
 class PacketFilterPlugin : public RakNet::PluginInterface2 {
 public:
