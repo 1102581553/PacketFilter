@@ -8,6 +8,7 @@ struct Config {
     int  version       = 1;
     bool enabled       = true;
     uint minPacketSize = 2;
+    bool fix0x86Crash  = true;
 };
 
 Config& getConfig();
