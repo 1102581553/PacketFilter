@@ -7,7 +7,12 @@
 #include <ll/api/memory/Hook.h>
 #include <ll/api/mod/RegisterHelper.h>
 #include <mc/deps/raknet/RakPeer.h>
+#include <mc/deps/raknet/RakPeerInterface.h>
 #include <mc/deps/raknet/Packet.h>
+#include <mc/deps/raknet/RNS2RecvStruct.h>
+#include <mc/deps/raknet/SystemAddress.h>
+#include <mc/network/RakPeerHelper.h>
+#include <mc/network/ConnectionDefinition.h>
 
 #include <cstring>
 #include <filesystem>
@@ -15,7 +20,7 @@
 
 namespace packet_filter {
 
-static Config config;
+static Config                          config;
 static std::shared_ptr<ll::io::Logger> log;
 
 static ll::io::Logger& getLogger() {
@@ -48,7 +53,7 @@ bool PacketFilter::load() {
         getLogger().warn("Failed to load config, using defaults");
         saveConfig();
     }
-    getLogger().info("Loaded. minPacketSize={}", config.minPacketSize);
+    getLogger().info("Loaded. minPacketSize={}, fix0x86Crash={}", config.minPacketSize, config.fix0x86Crash);
     return true;
 }
 
@@ -62,8 +67,59 @@ bool PacketFilter::disable() {
     return true;
 }
 
+// ── 原始数据报过滤（RakNet 内部处理之前）─────────────────
+static bool handleIncomingDatagram(RakNet::RNS2RecvStruct* recv) {
+    if (!config.enabled || !recv) return true;
+
+    // 通过偏移读取 bytes_read
+    int bytesRead = 0;
+    std::memcpy(&bytesRead, reinterpret_cast<char*>(recv) + kRecvBytesReadOffset, sizeof(int));
+    if (bytesRead <= 0) return true;
+
+    // 读取首字节（packet id）
+    auto* data = reinterpret_cast<char*>(recv) + kRecvDataOffset;
+    auto packetId = static_cast<unsigned char>(data[0]);
+
+    // MCPE-228407: 0x86 包过短导致 buffer over-read 崩服
+    if (config.fix0x86Crash && packetId == 0x86 &&
+        static_cast<size_t>(bytesRead) < sizeof(unsigned char) + sizeof(RakNet::SystemAddress)) {
+        return false;
+    }
+
+    // 通用最小长度过滤
+    if (static_cast<uint>(bytesRead) < config.minPacketSize) {
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace packet_filter
 
+// ── Hook peerStartup，注入数据报过滤器 ───────────────────
+LL_AUTO_TYPE_INSTANCE_HOOK(
+    RakPeerHelperStartupHook,
+    ll::memory::HookPriority::Normal,
+    RakPeerHelper,
+    &RakPeerHelper::peerStartup,
+    ::RakNet::StartupResult,
+    ::RakNet::RakPeerInterface* peer,
+    ::ConnectionDefinition const& def,
+    ::RakPeerHelper::PeerPurpose purpose
+) {
+    using namespace packet_filter;
+
+    auto result = origin(peer, def, purpose);
+
+    if (peer && config.enabled) {
+        peer->SetIncomingDatagramEventHandler(handleIncomingDatagram);
+        getLogger().info("Datagram filter installed (fix0x86Crash={})", config.fix0x86Crash);
+    }
+
+    return result;
+}
+
+// ── Hook RakPeer::Receive，过滤已处理的过短包 ─────────────
 LL_AUTO_TYPE_INSTANCE_HOOK(
     RakPeerReceiveHook,
     ll::memory::HookPriority::Normal,
