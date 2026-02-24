@@ -1,26 +1,27 @@
-# LeviLamina Mod Template
+# PacketFilter
 
-Mod Template for LeviLamina
+适用于 [LeviLamina](https://github.com/LiteLDev/LeviLamina) 的网络数据包过滤插件，用于防御恶意构造的崩服数据包。
 
-## Usage
+## 功能
 
-For detailed instructions, see the [LeviLamina Documentation](https://lamina.levimc.org/developer_guides/tutorials/create_your_first_mod/)
+- 修复 MCPE-228407 漏洞：拦截畸形 0x86 数据包导致的服务端 buffer over-read 崩溃
+- 双层数据包过滤：在 RakNet 解析前（数据报层）和解析后（逻辑包层）分别拦截异常短包
+- 可配置最小包长阈值，灵活适配不同服务端环境
 
-1. Generate a new repository from this template
-2. Clone the new repository
-3. Change the mod name and the expected LeviLamina version in `xmake.lua`
-4. Add your code.
-5. Run `xmake f -y -p windows -a x64 -m release` in the root of the repository
-6. Run `xmake` to build the mod.
+## 安装
 
-After a successful build, you will find mod in `bin/`
+1. 安装 [LeviLamina](https://github.com/LiteLDev/LeviLamina) 1.9.5 或更高版本
+2. 将插件放入 `plugins/` 目录
+3. 启动服务端，插件会自动生成配置文件
 
-## Contributing
+## 配置
 
-Ask questions by creating an issue.
+配置文件位于 `plugins/PacketFilter/config.json`：
 
-PRs accepted.
-
-## License
-
-CC0-1.0 © LeviMC(LiteLDev)
+```json
+{
+    "version": 1,
+    "enabled": true,
+    "minPacketSize": 2,
+    "fix0x86Crash": true
+}
