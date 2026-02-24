@@ -1,4 +1,5 @@
 #include "PacketFilter.h"
+#include "PacketFilterPlugin.h"
 
 #include <ll/api/Config.h>
 #include <ll/api/io/Logger.h>
@@ -8,6 +9,7 @@
 #include <mc/deps/raknet/RakPeer.h>
 #include <mc/deps/raknet/Packet.h>
 
+#include <cstring>
 #include <filesystem>
 #include <memory>
 
@@ -62,7 +64,6 @@ bool PacketFilter::disable() {
 
 } // namespace packet_filter
 
-// ── Hook RakPeer::Receive，过滤过短的包 ───────────────────
 LL_AUTO_TYPE_INSTANCE_HOOK(
     RakPeerReceiveHook,
     ll::memory::HookPriority::Normal,
@@ -75,7 +76,9 @@ LL_AUTO_TYPE_INSTANCE_HOOK(
     auto* packet = origin();
     if (!config.enabled || !packet) return packet;
 
-    if (packet->length < config.minPacketSize) {
+    uint len = 0;
+    std::memcpy(&len, reinterpret_cast<char*>(packet) + kPacketLengthOffset, sizeof(uint));
+    if (len < config.minPacketSize) {
         this->DeallocatePacket(packet);
         return nullptr;
     }
