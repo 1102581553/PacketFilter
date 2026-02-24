@@ -1,5 +1,4 @@
 #include "PacketFilter.h"
-#include "PacketFilterPlugin.h"
 
 #include <ll/api/Config.h>
 #include <ll/api/io/Logger.h>
@@ -7,8 +6,7 @@
 #include <ll/api/memory/Hook.h>
 #include <ll/api/mod/RegisterHelper.h>
 #include <mc/deps/raknet/RakPeer.h>
-#include <mc/deps/raknet/SocketDescriptor.h>
-#include <mc/deps/raknet/StartupResult.h>
+#include <mc/deps/raknet/Packet.h>
 
 #include <filesystem>
 #include <memory>
@@ -17,7 +15,6 @@ namespace packet_filter {
 
 static Config config;
 static std::shared_ptr<ll::io::Logger> log;
-std::unique_ptr<PacketFilterPlugin> gPlugin;
 
 static ll::io::Logger& getLogger() {
     if (!log) log = ll::io::LoggerRegistry::getInstance().getOrCreate("PacketFilter");
@@ -49,13 +46,11 @@ bool PacketFilter::load() {
         getLogger().warn("Failed to load config, using defaults");
         saveConfig();
     }
-    gPlugin = std::make_unique<PacketFilterPlugin>(config.minPacketSize);
     getLogger().info("Loaded. minPacketSize={}", config.minPacketSize);
     return true;
 }
 
 bool PacketFilter::enable() {
-    if (gPlugin) gPlugin->setMinSize(config.minPacketSize);
     getLogger().info("Enabled");
     return true;
 }
@@ -67,23 +62,25 @@ bool PacketFilter::disable() {
 
 } // namespace packet_filter
 
-// ── Hook RakPeer::Startup，attach 插件 ────────────────────
+// ── Hook RakPeer::Receive，过滤过短的包 ───────────────────
 LL_AUTO_TYPE_INSTANCE_HOOK(
-    RakPeerStartupHook,
+    RakPeerReceiveHook,
     ll::memory::HookPriority::Normal,
     RakNet::RakPeer,
-    &RakNet::RakPeer::$Startup,
-    ::RakNet::StartupResult,
-    uint maxConnections,
-    ::RakNet::SocketDescriptor* socketDescriptors,
-    uint socketDescriptorCount,
-    int threadPriority
+    &RakNet::RakPeer::$Receive,
+    ::RakNet::Packet*
 ) {
-    auto result = origin(maxConnections, socketDescriptors, socketDescriptorCount, threadPriority);
-    if (result == ::RakNet::StartupResult::RaknetStarted && packet_filter::gPlugin) {
-        this->AttachPlugin(packet_filter::gPlugin.get());
+    using namespace packet_filter;
+
+    auto* packet = origin();
+    if (!config.enabled || !packet) return packet;
+
+    if (packet->length < config.minPacketSize) {
+        this->DeallocatePacket(packet);
+        return nullptr;
     }
-    return result;
+
+    return packet;
 }
 
 LL_REGISTER_MOD(packet_filter::PacketFilter, packet_filter::PacketFilter::getInstance());
