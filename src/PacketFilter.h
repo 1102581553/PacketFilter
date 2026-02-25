@@ -5,10 +5,10 @@
 namespace packet_filter {
 
 struct Config {
-    int  version       = 1;
-    bool enabled       = true;
-    uint minPacketSize = 2;
-    bool fix0x86Crash  = true;
+    int      version       = 1;
+    bool     enabled       = true;
+    uint32_t minPacketSize = 2;
+    bool     fix0x86Crash  = true;
 };
 
 Config& getConfig();
@@ -23,6 +23,7 @@ public:
     bool load();
     bool enable();
     bool disable();
+
 private:
     ll::mod::NativeMod& mSelf;
 };
