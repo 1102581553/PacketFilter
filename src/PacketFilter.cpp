@@ -1,5 +1,4 @@
 #include "PacketFilter.h"
-#include "PacketFilterPlugin.h"
 
 #include <ll/api/Config.h>
 #include <ll/api/io/Logger.h>
@@ -14,7 +13,6 @@
 #include <mc/network/RakPeerHelper.h>
 #include <mc/network/ConnectionDefinition.h>
 
-#include <cstring>
 #include <filesystem>
 #include <memory>
 
@@ -67,18 +65,20 @@ bool PacketFilter::disable() {
     return true;
 }
 
+// RakNet 保留 0x00-0x7F 给内部协议（握手、心跳、断连等），必须放行
+static bool isRakNetInternalPacket(unsigned char id) { return id < 0x80; }
+
 // 原始数据报过滤
 static bool handleIncomingDatagram(RakNet::RNS2RecvStruct* recv) {
     if (!config.enabled || !recv) return true;
 
-    // 通过偏移读取 bytes_read
-    int bytesRead = 0;
-    std::memcpy(&bytesRead, reinterpret_cast<char*>(recv) + kRecvBytesReadOffset, sizeof(int));
+    int bytesRead = recv->bytesRead;
     if (bytesRead <= 0) return true;
 
-    // 读取首字节（packet id）
-    auto* data = reinterpret_cast<char*>(recv) + kRecvDataOffset;
-    auto packetId = static_cast<unsigned char>(data[0]);
+    auto packetId = static_cast<unsigned char>(recv->data[0]);
+
+    // RakNet 内部协议包无条件放行
+    if (isRakNetInternalPacket(packetId)) return true;
 
     // MCPE-228407: 0x86 包过短导致 buffer over-read 崩服
     if (config.fix0x86Crash && packetId == 0x86 &&
@@ -86,8 +86,8 @@ static bool handleIncomingDatagram(RakNet::RNS2RecvStruct* recv) {
         return false;
     }
 
-    // 通用最小长度过滤
-    if (static_cast<uint>(bytesRead) < config.minPacketSize) {
+    // 通用最小长度过滤（仅用户层包）
+    if (static_cast<uint32_t>(bytesRead) < config.minPacketSize) {
         return false;
     }
 
@@ -96,7 +96,7 @@ static bool handleIncomingDatagram(RakNet::RNS2RecvStruct* recv) {
 
 } // namespace packet_filter
 
-//  Hook peerStartup
+// Hook peerStartup
 LL_AUTO_TYPE_INSTANCE_HOOK(
     RakPeerHelperStartupHook,
     ll::memory::HookPriority::Normal,
@@ -132,9 +132,13 @@ LL_AUTO_TYPE_INSTANCE_HOOK(
     auto* packet = origin();
     if (!config.enabled || !packet) return packet;
 
-    uint len = 0;
-    std::memcpy(&len, reinterpret_cast<char*>(packet) + kPacketLengthOffset, sizeof(uint));
-    if (len < config.minPacketSize) {
+    // RakNet 内部包（断连、心跳等）必须放行，否则连接状态机卡死
+    if (packet->length > 0 && isRakNetInternalPacket(packet->data[0])) {
+        return packet;
+    }
+
+    // 仅过滤用户层包
+    if (packet->length < config.minPacketSize) {
         this->DeallocatePacket(packet);
         return nullptr;
     }
