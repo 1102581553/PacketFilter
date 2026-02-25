@@ -5,10 +5,11 @@
 namespace packet_filter {
 
 struct Config {
-    int  version          = 1;
-    bool enabled          = true;
+    int  version           = 1;
+    bool enabled           = true;
     bool filterEmptyPacket = true;
-    bool fix0x86Crash     = true;
+    bool fix0x86Crash      = true;
+    bool fixNaNCrash       = true;
 };
 
 Config& getConfig();
